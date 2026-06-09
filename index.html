@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ES Facts-Ledger</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#16202c; --paper:#f6f7f9; --panel:#ffffff; --line:#dde2e8;
+    --muted:#5c6b7a; --accent:#1f5c8b;
+    --must:#c0392b; --should:#c77b16; --low:#2e7d4f; --ok:#2e7d4f; --neutral:#5c6b7a;
+    --display:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);
+       line-height:1.5;font-size:15px}
+  .wrap{max-width:960px;margin:0 auto;padding:40px 24px 80px}
+  header{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:8px}
+  h1{font-family:var(--display);font-weight:600;font-size:30px;letter-spacing:-.01em;margin:0}
+  .tag{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.14em;
+       color:var(--accent);margin:0 0 6px}
+  .lead{color:var(--muted);margin:14px 0 0;max-width:60ch}
+  .privacy{font-size:13px;color:var(--muted);margin-top:10px}
+  .privacy b{color:var(--ink)}
+  h2{font-family:var(--display);font-size:20px;font-weight:600;margin:38px 0 4px;
+     padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .hint{color:var(--muted);font-size:13px;margin:2px 0 16px}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
+  @media(max-width:680px){.grid{grid-template-columns:1fr}}
+  .slot{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:14px 16px}
+  .slot.req{border-color:var(--accent)}
+  .slot label{display:block;font-weight:600;font-size:14px;margin-bottom:2px}
+  .slot .role{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;
+              letter-spacing:.12em;color:var(--muted)}
+  .slot input[type=file]{display:none}
+  .pick{display:inline-block;margin-top:10px;font-family:var(--mono);font-size:12px;
+        border:1px solid var(--ink);border-radius:5px;padding:5px 11px;cursor:pointer;
+        background:var(--ink);color:#fff}
+  .pick:hover{background:#000}
+  .fname{font-family:var(--mono);font-size:12px;color:var(--accent);margin-left:10px;
+         word-break:break-all}
+
+  .run{margin-top:24px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  button.go{font-family:var(--body);font-weight:600;font-size:15px;border:none;
+            background:var(--accent);color:#fff;border-radius:7px;padding:11px 22px;cursor:pointer}
+  button.go:disabled{opacity:.45;cursor:not-allowed}
+  button.go:hover:not(:disabled){background:#17486e}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--ink);border-radius:7px;
+               padding:10px 16px;font-size:14px;cursor:pointer}
+  button.ghost:hover{border-color:var(--ink)}
+  .status{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+
+  #out{margin-top:14px}
+  .summary{font-family:var(--mono);font-size:13px;background:var(--panel);
+           border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:6px}
+  .summary b{color:var(--ink)}
+
+  .row{border:1px solid var(--line);border-left:4px solid var(--neutral);background:var(--panel);
+       border-radius:6px;padding:12px 16px;margin:10px 0;animation:fade .25s ease}
+  .row.must{border-left-color:var(--must)} .row.should{border-left-color:var(--should)}
+  .row.low{border-left-color:var(--low)}
+  @keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){.row{animation:none}}
+  .row .desc{font-weight:600}
+  .chip{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;
+        padding:2px 8px;border-radius:20px;color:#fff;margin-left:8px;white-space:nowrap}
+  .chip.must{background:var(--must)} .chip.should{background:var(--should)} .chip.low{background:var(--low)}
+  .kv{font-family:var(--mono);font-size:12.5px;margin-top:7px;color:var(--ink)}
+  .kv .k{color:var(--muted)}
+  .kv .truth{color:var(--ok)} .kv .conf{color:var(--must)}
+
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+  td.val,td.src{font-family:var(--mono);font-size:12px}
+  td.val{color:var(--ok);white-space:nowrap} td.src{color:var(--muted)}
+  .empty{color:var(--muted);font-style:italic;padding:8px 0}
+  footer{margin-top:50px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+  footer code{font-family:var(--mono);font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="tag">EIA Review · Stage 1 · deterministic</p>
+    <h1>ES Facts-Ledger</h1>
+  </header>
+  <p class="lead">Check one topic chapter against its source-of-truth documents and surface where its
+     stated figures disagree with the agreed project parameters — before the chapter reaches a director.
+     No interpretation, no guesswork: literal values, controlled terms and arithmetic only.</p>
+  <p class="privacy"><b>Private by design.</b> Every file is parsed in your browser. Nothing is uploaded or sent anywhere.</p>
+
+  <h2>Documents</h2>
+  <p class="hint">The chapter is required. Add whichever source docs you have — Crib Sheet is treated as most authoritative, then DoD, then Scoping.</p>
+  <div class="grid">
+    <div class="slot req" data-role="chapter">
+      <span class="role">required · chapter under review</span>
+      <label>Topic chapter</label>
+      <span class="role">.docx or .pdf</span><br>
+      <label class="pick">Choose file<input type="file" accept=".docx,.pdf"></label>
+      <span class="fname">none</span>
+    </div>
+    <div class="slot" data-role="crib">
+      <span class="role">source of truth · most authoritative</span>
+      <label>Crib Sheet</label>
+      <span class="role">.xlsx · .csv · .docx · .pdf</span><br>
+      <label class="pick">Choose file<input type="file" accept=".xlsx,.csv,.docx,.pdf"></label>
+      <span class="fname">none</span>
+    </div>
+    <div class="slot" data-role="dod">
+      <span class="role">source of truth</span>
+      <label>Description of Development</label>
+      <span class="role">.pdf or .docx</span><br>
+      <label class="pick">Choose file<input type="file" accept=".pdf,.docx"></label>
+      <span class="fname">none</span>
+    </div>
+    <div class="slot" data-role="scoping">
+      <span class="role">source of truth</span>
+      <label>Scoping Report / Opinion</label>
+      <span class="role">.pdf or .docx</span><br>
+      <label class="pick">Choose file<input type="file" accept=".pdf,.docx"></label>
+      <span class="fname">none</span>
+    </div>
+  </div>
+
+  <div class="run">
+    <button class="go" id="run" disabled>Reconcile</button>
+    <button class="ghost" id="dl" style="display:none">Download report (.md)</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div id="out"></div>
+
+  <footer>
+    Deterministic pre-pass only — it catches value mismatches, controlled-term slips and arithmetic errors.
+    It does <b>not</b> judge whether an assessment is reasoned or mitigation correctly classed; those are the
+    judgement-stage checks. Parameter and term lists live in the <code>PARAMETERS</code> / <code>TOKEN_CHECKS</code>
+    arrays in this file's source — extend them with a one-line entry.
+  </footer>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+/* ---- normalisers ---- */
+const nFloat = v => parseFloat(v.replace(/,/g,""));
+const nInt   = v => parseInt(v.replace(/,/g,""),10);
+const nSqmHa = v => parseFloat(v.replace(/,/g,""))/10000;
+
+/* ---- parameter registry (mirror of facts_ledger.py) ---- */
+const PARAMETERS = [
+  {key:"site_area",desc:"Total application site area",unit:"ha",dp:2,norm:nFloat,
+    pats:[String.raw`(?:total\s+Site\s+area\s+of|Site\s+area[^.]{0,40}?reduced\s+to)\s*(?<v>\d{2,3}\.\d{1,2})\s*ha`]},
+  {key:"gi_area",desc:"Green infrastructure area",unit:"ha",dp:2,norm:nFloat,
+    pats:[String.raw`(?<v>\d{2}\.\d{1,2})\s*ha\s+of\s+green\s+infrastructure`,
+          String.raw`green\s+infrastructure[^.]{0,80}?(?<v>\d{2}\.\d{1,2})\s*ha`]},
+  {key:"gi_area",desc:"Green infrastructure area (from sqm total)",unit:"ha",dp:2,norm:nSqmHa,
+    pats:[String.raw`Total\s+(?<v>550,250)`]},
+  {key:"net_developable",desc:"Net developable area",unit:"ha",dp:1,norm:nFloat,
+    pats:[String.raw`net\s+developable\s+area[^.]{0,40}?(?<v>\d{2})\s*ha`]},
+  {key:"dwellings",desc:"Maximum dwellings",unit:"homes",dp:0,norm:nInt,
+    pats:[String.raw`up\s+to\s+(?<v>1,500)\s+(?:new\s+)?(?:dwellings|homes)`]},
+  {key:"sang_area",desc:"SANG / Community Park area",unit:"ha",dp:2,norm:nFloat,
+    pats:[String.raw`(?:total\s+SANG\s+area\s+is|SANG[^.]{0,40}?)(?<v>28\.\d{1,2})\s*ha`]},
+  {key:"care_beds",desc:"Care home beds",unit:"beds",dp:0,norm:nInt,
+    pats:[String.raw`(?:approximately\s+)?(?<v>70)\s+beds`]},
+  {key:"con_start",desc:"Construction commencement year",unit:"year",dp:0,norm:nInt,
+    pats:[String.raw`commence\D{0,15}(?<v>20\d{2})`]},
+  {key:"con_complete",desc:"Completion / full-occupation year",unit:"year",dp:0,norm:nInt,
+    pats:[String.raw`(?:complete(?:d)?\s+(?:by|in)|fully\s+occupied\s+by|full\s+complete\s+in)\s*(?<v>20\d{2})`,
+          String.raw`year\s+of\s+assessment[^.]{0,30}?(?<v>20\d{2})`]},
+  {key:"con_peak",desc:"Peak construction year",unit:"year",dp:0,norm:nInt,
+    pats:[String.raw`peak\s+year\D{0,25}(?<v>20\d{2})`]},
+  {key:"first_occ",desc:"First occupation year",unit:"year",dp:0,norm:nInt,
+    pats:[String.raw`first\s+occupation\D{0,30}(?<v>20\d{2})`,
+          String.raw`occupation\s+of\s+residential\D{0,20}(?<v>20\d{2})`]},
+  {key:"con_duration",desc:"Indicative build-out period",unit:"years",dp:0,norm:nInt,
+    pats:[String.raw`(?<v>\d{1,2})\s*years?,?\s+with\s+works`,
+          String.raw`build\s*[- ]?out\s+period\s+of\s+(?<v>\d{1,2})\s*years`]},
+  {key:"earth_subsoil",desc:"Net subsoil cut",unit:"m3",dp:0,norm:nInt,
+    pats:[String.raw`(?<v>\d{2,3},\d{3})\s*m3?\s*of\s+subsoil`]},
+  {key:"earth_topsoil",desc:"Net topsoil cut",unit:"m3",dp:0,norm:nInt,
+    pats:[String.raw`(?<v>\d{2,3},\d{3})\s*m3?\s*of\s+topsoil`]},
+  {key:"earth_total",desc:"Topsoil + subsoil (table total)",unit:"m3",dp:0,norm:nInt,
+    pats:[String.raw`Topsoil\s+and\s+Subsoil\s+(?<v>\d{3},\d{3})`]},
+];
+const DERIVED = [
+  {label:"Earthworks balance (subsoil + topsoil = stated total)",
+   comps:["earth_subsoil","earth_topsoil"],total:"earth_total"}
+];
+const TOKEN_CHECKS = [
+  {key:"access_road",desc:"Principal access road reference",
+   find:String.raw`\bB4(?<v>\d{2})\b`,canon:["87"],note:"All access references should be the B487."},
+  {key:"chapter_range",desc:"Technical-chapter range reference",
+   find:String.raw`Chapters?\s+7\s*(?:–|-|to)\s*(?<v>1[0-9])`,canon:["17"],note:"Technical chapters run 7–17."},
+];
+const TOL = {rounding:0.25, check:5.0};
+const RANK = {crib:0, dod:1, scoping:2, chapter:3, other:4};
+
+/* ---- helpers ---- */
+const lineOf = (t,p)=> (t.slice(0,p).match(/\n/g)||[]).length + 1;
+const snippet = (t,a,b)=> t.slice(Math.max(0,a-35), b+35).replace(/\s+/g," ").trim();
+function sectionOf(t,p,chap){
+  const head=t.slice(0,p);
+  if(chap!=null){
+    const m=[...head.matchAll(new RegExp(String.raw`^\s*(${chap}\.\d{1,2}(?:\.\d{1,2})?)\b`,"gm"))];
+    if(m.length) return m[m.length-1][1];
+  }
+  const a=[...head.matchAll(/^\s*(\d\.\d{1,2}(?:\.\d{1,2})?)\b/gm)];
+  return a.length? a[a.length-1][1] : "?";
+}
+const reldiff = vs => {const lo=Math.min(...vs),hi=Math.max(...vs);return hi===0?0:Math.abs(hi-lo)/Math.abs(hi)*100;};
+const grade = rd => rd<=TOL.rounding ? "low" : rd<=TOL.check ? "should" : "must";
+const gradeLabel = {must:"MUST-CHECK",should:"SHOULD-CHECK",low:"LOW · likely rounding/typo"};
+const round = (x,dp)=> Number(x.toFixed(dp));
+const detectChapter = t => {
+  const ns=[...t.matchAll(/^\s*(\d{1,2})\.\d{1,2}(?:\.\d{1,2})?\b/gm)].map(m=>m[1]);
+  if(!ns.length) return null;
+  const c={}; ns.forEach(n=>c[n]=(c[n]||0)+1);
+  return Object.keys(c).reduce((a,b)=>c[b]>c[a]?b:a);
+};
+
+/* ---- loaders ---- */
+async function loadDocx(buf){
+  const zip = await JSZip.loadAsync(buf);
+  const xml = await zip.file("word/document.xml").async("string");
+  const doc = new DOMParser().parseFromString(xml,"application/xml");
+  const ps = doc.getElementsByTagName("w:p");
+  const lines=[];
+  for(const p of ps){
+    const ts=p.getElementsByTagName("w:t"); let s="";
+    for(const t of ts) s += t.textContent||"";
+    lines.push(s);
+  }
+  return lines.join("\n");
+}
+async function loadPdf(buf){
+  const pdf = await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  const out=[];
+  for(let i=1;i<=pdf.numPages;i++){
+    const tc = await (await pdf.getPage(i)).getTextContent();
+    let line="";
+    for(const it of tc.items){
+      line += it.str;
+      if(it.hasEOL){ out.push(line); line=""; } else line += " ";
+    }
+    if(line) out.push(line);
+  }
+  return out.join("\n");
+}
+function loadXlsx(buf){
+  const wb = XLSX.read(new Uint8Array(buf),{type:"array"});
+  return wb.SheetNames.map(n=>XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n");
+}
+async function readDoc(file){
+  const buf = await file.arrayBuffer();
+  const ext = file.name.toLowerCase().split(".").pop();
+  if(ext==="docx") return loadDocx(buf);
+  if(ext==="pdf")  return loadPdf(buf);
+  if(ext==="xlsx") return loadXlsx(buf);
+  if(["csv","txt","tsv"].includes(ext)) return new TextDecoder().decode(buf);
+  throw new Error("Unsupported file type: ."+ext);
+}
+
+/* ---- core reconciliation (mirror of run()) ---- */
+function reconcile(corpus){
+  const ledger={}; const meta={};
+  for(const p of PARAMETERS){
+    meta[p.key]=p;
+    for(const c of corpus){
+      for(const pat of p.pats){
+        const re=new RegExp(pat,"gi");
+        for(const m of c.text.matchAll(re)){
+          const raw=m.groups.v;
+          (ledger[p.key]=ledger[p.key]||[]).push({
+            value:round(p.norm(raw),p.dp), label:c.label, role:c.role, rank:c.rank,
+            line:lineOf(c.text,m.index), sec:sectionOf(c.text,m.index,c.chap),
+            raw, snip:snippet(c.text,m.index,m.index+m[0].length)});
+        }
+      }
+    }
+  }
+  const findings=[], confirmed=[], recorded=[];
+  const src = h => `${h.label} §${h.sec} (“${h.raw}”, L${h.line})`;
+  for(const key in ledger){
+    const hits=ledger[key], p=meta[key];
+    const vals=[...new Set(hits.map(h=>h.value))].sort((a,b)=>a-b);
+    const ndocs=new Set(hits.map(h=>h.label)).size;
+    if(vals.length<=1){
+      const row={desc:p.desc,val:`${vals[0]} ${p.unit}`,ndocs,srcs:hits.map(src).join("; ")};
+      (ndocs>=2?confirmed:recorded).push(row);
+    }else{
+      const rd=reldiff(vals);
+      const auth=hits.reduce((a,b)=>b.rank<a.rank?b:a);
+      const others=hits.filter(h=>h.value!==auth.value);
+      findings.push({desc:p.desc,sev:grade(rd),rd,
+        authoritative:`${auth.value} ${p.unit} — ${src(auth)} [${auth.role}]`,
+        conflicting:others.map(h=>`${h.value} ${p.unit} — ${src(h)} [${h.role}]`).join("; ")});
+    }
+  }
+  for(const d of DERIVED){
+    if(d.comps.every(k=>ledger[k]) && ledger[d.total]){
+      const s=d.comps.reduce((a,k)=>a+ledger[k][0].value,0), t=ledger[d.total][0].value;
+      const rd=t? Math.abs(t-s)/t*100 : 0;
+      const detail=`${d.comps.map(k=>ledger[k][0].value.toLocaleString()).join(" + ")} = ${s.toLocaleString()} vs stated ${t.toLocaleString()}`;
+      if(rd<=TOL.rounding) confirmed.push({desc:d.label,val:`${detail} (Δ ${rd.toFixed(3)}%)`,ndocs:d.comps.length+1,srcs:"arithmetic check"});
+      else findings.push({desc:d.label,sev:grade(rd),rd,authoritative:`stated total ${t.toLocaleString()} m3`,conflicting:`components sum to ${s.toLocaleString()} m3`});
+    }
+  }
+  for(const ck of TOKEN_CHECKS){
+    const bad=[]; let good=0;
+    for(const c of corpus){
+      for(const m of c.text.matchAll(new RegExp(ck.find,"g"))){
+        if(ck.canon.includes(m.groups.v)) good++;
+        else bad.push(`${c.label} §${sectionOf(c.text,m.index,c.chap)} (“${m[0]}”, L${lineOf(c.text,m.index)})`);
+      }
+    }
+    if(bad.length) findings.push({desc:ck.desc,sev:"should",rd:null,authoritative:ck.note,conflicting:bad.join("; ")});
+    else if(good) confirmed.push({desc:ck.desc,val:"all references canonical",ndocs:"—",srcs:"consistent across corpus"});
+  }
+  return {findings,confirmed,recorded};
+}
+
+/* ---- UI wiring ---- */
+const slots=[...document.querySelectorAll(".slot")];
+const state={};
+slots.forEach(s=>{
+  const role=s.dataset.role, input=s.querySelector("input"), name=s.querySelector(".fname");
+  input.addEventListener("change",()=>{
+    if(input.files[0]){ state[role]=input.files[0]; name.textContent=input.files[0].name; }
+    else { delete state[role]; name.textContent="none"; }
+    document.getElementById("run").disabled = !state.chapter;
+  });
+});
+
+let lastReport="";
+document.getElementById("run").addEventListener("click",async ()=>{
+  const status=document.getElementById("status"), out=document.getElementById("out");
+  out.innerHTML=""; document.getElementById("dl").style.display="none";
+  status.textContent="Parsing documents…";
+  try{
+    const order=["chapter","crib","dod","scoping"];
+    const corpus=[];
+    for(const role of order){
+      if(!state[role]) continue;
+      const text=await readDoc(state[role]);
+      corpus.push({label:state[role].name, role, rank:RANK[role], chap:detectChapter(text), text});
+    }
+    status.textContent="Reconciling…";
+    const {findings,confirmed,recorded}=reconcile(corpus);
+    render(findings,confirmed,recorded,corpus);
+    lastReport=markdown(findings,confirmed,recorded,corpus);
+    document.getElementById("dl").style.display="";
+    status.textContent="Done — "+findings.length+" to review.";
+  }catch(e){
+    status.textContent="";
+    out.innerHTML=`<div class="row must"><div class="desc">Couldn’t process the files</div>
+      <div class="kv"><span class="k">reason:</span> ${escapeHtml(e.message)}. Check the file types and try again.</div></div>`;
+  }
+});
+
+document.getElementById("dl").addEventListener("click",()=>{
+  const blob=new Blob([lastReport],{type:"text/markdown"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download="ES_FactsLedger_Report.md"; a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+function escapeHtml(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+function render(findings,confirmed,recorded,corpus){
+  const out=document.getElementById("out");
+  const chapter=corpus.find(c=>c.role==="chapter");
+  const checked=corpus.filter(c=>c.role!=="chapter").map(c=>`${c.label} (${c.role})`).join(", ")||"— no source docs added —";
+  let h=`<div class="summary"><b>Chapter:</b> ${escapeHtml(chapter.label)}<br>
+    <b>Checked against:</b> ${escapeHtml(checked)}<br>
+    <b>Result:</b> ${findings.length} to review · ${confirmed.length} cross-confirmed · ${recorded.length} single-source</div>`;
+
+  h+=`<h2>To review</h2>`;
+  if(!findings.length) h+=`<p class="empty">Nothing flagged.</p>`;
+  findings.forEach((f,i)=>{
+    const rd=f.rd!=null?`  ·  Δ ${f.rd.toFixed(3)}%`:"";
+    h+=`<div class="row ${f.sev}">
+      <span class="desc">${i+1}. ${escapeHtml(f.desc)}</span>
+      <span class="chip ${f.sev}">${gradeLabel[f.sev]}</span><span class="k">${rd}</span>
+      <div class="kv"><span class="k truth">source of truth:</span> <span class="truth">${escapeHtml(f.authoritative)}</span></div>
+      <div class="kv"><span class="k conf">conflicts with:</span> <span class="conf">${escapeHtml(f.conflicting)}</span></div>
+    </div>`;
+  });
+
+  h+=`<h2>Cross-confirmed</h2><p class="hint">Found in two or more documents and in agreement — your evidence the figures reconcile.</p>`;
+  h+=tableOf(confirmed,true);
+  h+=`<h2>Recorded — single source</h2><p class="hint">Appears in only one document, so there was nothing to check it against. Add more source docs to turn these into cross-checks.</p>`;
+  h+=tableOf(recorded,false);
+  out.innerHTML=h;
+}
+function tableOf(rows,withDocs){
+  if(!rows.length) return `<p class="empty">None.</p>`;
+  let h=`<table><thead><tr><th>Parameter</th><th>Value</th>${withDocs?"<th>Docs</th>":""}<th>Source</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    h+=`<tr><td>${escapeHtml(r.desc)}</td><td class="val">${escapeHtml(r.val)}</td>${withDocs?`<td class="val">${r.ndocs}</td>`:""}<td class="src">${escapeHtml(r.srcs)}</td></tr>`;
+  });
+  return h+`</tbody></table>`;
+}
+function markdown(findings,confirmed,recorded,corpus){
+  const chapter=corpus.find(c=>c.role==="chapter");
+  const checked=corpus.filter(c=>c.role!=="chapter").map(c=>`${c.label} (${c.role})`).join(", ");
+  let L=[`# ES Facts-Ledger — Reconciliation Report\n`,
+    `\n**Chapter under review:** ${chapter.label}\n`,
+    `\n**Checked against:** ${checked||"(none)"}\n`,
+    `\n**Authority order:** Crib Sheet → DoD → Scoping → chapter\n`,
+    `\n**Result:** ${findings.length} to review · ${confirmed.length} cross-confirmed · ${recorded.length} single-source.\n`,
+    `\n## To review\n`];
+  if(!findings.length) L.push(`\n_Nothing flagged._\n`);
+  findings.forEach((f,i)=>{
+    const rd=f.rd!=null?`  ·  Δ ${f.rd.toFixed(3)}%`:"";
+    L.push(`\n**${i+1}. ${f.desc}** — \`${gradeLabel[f.sev]}\`${rd}`);
+    L.push(`\n- Source of truth: ${f.authoritative}`);
+    L.push(`\n- Conflicts with: ${f.conflicting}\n`);
+  });
+  L.push(`\n## Cross-confirmed (no action)\n\n| Parameter | Value | Docs | Sources |\n|---|---|---|---|`);
+  confirmed.forEach(r=>L.push(`\n| ${r.desc} | \`${r.val}\` | ${r.ndocs} | ${r.srcs} |`));
+  L.push(`\n\n## Recorded — single source\n\n| Parameter | Value | Source |\n|---|---|---|`);
+  recorded.forEach(r=>L.push(`\n| ${r.desc} | \`${r.val}\` | ${r.srcs} |`));
+  return L.join("")+"\n";
+}
+</script>
+</body>
+</html>
